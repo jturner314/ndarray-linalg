@@ -154,7 +154,7 @@ where
     }
 }
 
-impl<A, S> CholeskySolve<A> for CholeskyFactorized<S>
+impl<A, S> CholeskySolve<A, Ix1> for CholeskyFactorized<S>
 where
     A: Scalar,
     S: Data<Elem = A>,
@@ -308,30 +308,42 @@ where
 
 /// Solve systems of linear equations with Hermitian (or real symmetric)
 /// positive definite coefficient matrices
-pub trait CholeskySolve<A: Scalar> {
-    /// Solves a system of linear equations `A * x = b` with Hermitian (or real
-    /// symmetric) positive definite matrix `A`, where `A` is `self`, `b` is
-    /// the argument, and `x` is the successful result.
-    fn solvec<S: Data<Elem = A>>(&self, b: &ArrayBase<S, Ix1>) -> Result<Array1<A>> {
+pub trait CholeskySolve<A: Scalar, Db: Dimension> {
+    /// Solves a system of linear equations `A * X = B` with Hermitian (or real
+    /// symmetric) positive definite matrix `A`, where `A` is `self`, `B` is
+    /// the argument, and `X` is the successful result.
+    ///
+    /// If the argument is a 1-D array, then it's treated as a column vector,
+    /// and a 1-D array is returned. If the argument is a 2-D array, then it's
+    /// treated as a matrix.
+    fn solvec<S: Data<Elem = A>>(&self, b: &ArrayBase<S, Db>) -> Result<ArrayBase<OwnedRepr<A>, Db>> {
         let mut b = replicate(b);
         self.solvec_inplace(&mut b)?;
         Ok(b)
     }
-    /// Solves a system of linear equations `A * x = b` with Hermitian (or real
-    /// symmetric) positive definite matrix `A`, where `A` is `self`, `b` is
-    /// the argument, and `x` is the successful result.
-    fn solvec_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, Ix1>) -> Result<ArrayBase<S, Ix1>> {
+    /// Solves a system of linear equations `A * X = B` with Hermitian (or real
+    /// symmetric) positive definite matrix `A`, where `A` is `self`, `B` is
+    /// the argument, and `X` is the successful result.
+    ///
+    /// If the argument is a 1-D array, then it's treated as a column vector,
+    /// and a 1-D array is returned. If the argument is a 2-D array, then it's
+    /// treated as a matrix.
+    fn solvec_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, Db>) -> Result<ArrayBase<S, Db>> {
         self.solvec_inplace(&mut b)?;
         Ok(b)
     }
-    /// Solves a system of linear equations `A * x = b` with Hermitian (or real
-    /// symmetric) positive definite matrix `A`, where `A` is `self`, `b` is
-    /// the argument, and `x` is the successful result. The value of `x` is
+    /// Solves a system of linear equations `A * X = B` with Hermitian (or real
+    /// symmetric) positive definite matrix `A`, where `A` is `self`, `B` is
+    /// the argument, and `X` is the successful result. The value of `X` is
     /// also assigned to the argument.
-    fn solvec_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, Ix1>) -> Result<&'a mut ArrayBase<S, Ix1>>;
+    ///
+    /// If the argument is a 1-D array, then it's treated as a column vector,
+    /// and a 1-D array is returned. If the argument is a 2-D array, then it's
+    /// treated as a matrix.
+    fn solvec_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, Db>) -> Result<&'a mut ArrayBase<S, Db>>;
 }
 
-impl<A, S> CholeskySolve<A> for ArrayBase<S, Ix2>
+impl<A, S> CholeskySolve<A, Ix1> for ArrayBase<S, Ix2>
 where
     A: Scalar,
     S: Data<Elem = A>,
