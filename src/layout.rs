@@ -135,3 +135,217 @@ where
         )?)
     }
 }
+
+// trait LapackLayout {
+//     fn is_lapack_layout(&self) -> bool;
+//     fn can_inplace_lapack_layout(&self) -> bool;
+//     fn copy_to_lapack_layout(&self) -> ??;
+//     fn inplace_lapack_layout(&mut self);
+// }
+
+trait ToLapackClone<A, D: Dimension> {
+    fn to_lapack_clone<So>(&self) -> ArrayBase<So, D> where So: DataOwned<Elem = A>;
+}
+
+impl<'a, A, S, D> ToLapackClone<A, D> for ArrayBase<S, D>
+where
+    A: Clone,
+    S: Data<Elem = A>,
+    D: Dimension,
+{
+    fn to_lapack_clone<So>(&self) -> ArrayBase<So, D> where So: DataOwned<Elem = A> {
+        unimplemented!()
+    }
+}
+
+enum LapackView<T> {
+    NoChange,
+    New(T),
+}
+
+trait ToLapackView: Sized {
+    fn to_lapack_view(&self) -> LapackView<Self>;
+}
+
+impl<S, D> ToLapackView for ArrayBase<S, D>
+where
+    S: Data,
+    D: Dimension,
+{
+    fn to_lapack_view(&self) -> LapackView<Self> {
+        unimplemented!()
+    }
+}
+
+enum LapackInplace<T> {
+    Inplace,
+    New(T),
+}
+
+trait ToLapackInplace: Sized {
+    fn to_lapack_inplace(&mut self) -> LapackInplace<Self>;
+}
+
+impl<S, D> ToLapackInplace for ArrayBase<S, D>
+where
+    S: DataMut,
+    D: Dimension,
+{
+    fn to_lapack_inplace(&mut self) -> LapackInplace<Self> {
+        unimplemented!()
+    }
+}
+
+pub(crate) fn with_lapack_into<A, S, D, F, O>(mut a: ArrayBase<S, D>, body: F) -> (ArrayBase<S, D>, O)
+where
+    A: Clone,
+    S: DataMut<Elem = A> + DataOwned,
+    D: Dimension,
+    F: FnOnce(&mut ArrayBase<S, D>) -> O,
+{
+    let mut a_lapack = match a.to_lapack_inplace() {
+        LapackInplace::Inplace => a,
+        LapackInplace::New(new) => new,
+    };
+    let out = body(&mut a_lapack);
+    (a_lapack, out)
+}
+
+pub(crate) fn with_lapack_inplace<A, S, D, F, O>(a: &mut ArrayBase<S, D>, body: F) -> (&mut ArrayBase<S, D>, O)
+where
+    A: Clone,
+    S: DataMut<Elem = A>,
+    D: Dimension,
+    F: FnOnce(&mut ArrayBase<S, D>) -> O,
+{
+    let out = match a.to_lapack_inplace() {
+        LapackInplace::Inplace => body(a),
+        LapackInplace::New(mut new) => {
+            let out = body(&mut new);
+            a.assign(&new);
+            out
+        }
+    };
+    (a, out)
+}
+
+pub(crate) fn with_lapack_clone<A, Sa, So, D, F, O>(a: &ArrayBase<Sa, D>, body: F) -> (ArrayBase<So, D>, O)
+where
+    A: Clone,
+    Sa: Data<Elem = A>,
+    So: DataOwned<Elem = A>,
+    D: Dimension,
+    F: FnOnce(&mut ArrayBase<So, D>) -> O,
+{
+    let mut a_lapack = a.to_lapack_clone();
+    let out = body(&mut a_lapack);
+    (a_lapack, out)
+}
+
+pub(crate) fn with_lapack_readonly<A, S, D, F, O>(a: &ArrayBase<S, D>, body: F) -> O
+where
+    A: Clone,
+    S: Data<Elem = A>,
+    D: Dimension,
+    F: FnOnce(&ArrayBase<S, D>) -> O,
+{
+    match a.to_lapack_view() {
+        LapackView::NoChange => body(a),
+        LapackView::New(new) => body(&new),
+    }
+}
+
+use types::*;
+
+fn solve_into_1<A, Sa, Sb>(a: &ArrayBase<Sa, Ix2>, b: ArrayBase<Sb, Ix1>) -> ArrayBase<Sb, Ix1>
+where
+    A: Scalar,
+    Sa: Data<Elem = A>,
+    Sb: DataOwned + DataMut<Elem = A>
+{
+    let (x, info) = with_lapack_into(b, |b: &mut ArrayBase<Sb, Ix1>| {
+        with_lapack_readonly(a, |a: &ArrayBase<Sa, Ix2>) {
+            unimplemented!()
+        }
+    });
+    x
+}
+
+fn solve_into_2<A, Sa, Sb>(a: &ArrayBase<Sa, Ix2>, b: ArrayBase<Sb, Ix2>) -> ArrayBase<Sb, Ix2>
+where
+    A: Scalar,
+    Sa: Data<Elem = A>,
+    Sb: DataOwned + DataMut<Elem = A>
+{
+    let (x, info) = with_lapack_into(b, |b: &mut ArrayBase<Sb, Ix2>| {
+        with_lapack_readonly(a, |a: &ArrayBase<Sa, Ix2>) {
+            unimplemented!()
+        }
+    });
+    x
+}
+
+fn solve_1<A, Sa, Sb, So>(a: &ArrayBase<Sa, Ix2>, b: &ArrayBase<Sb, Ix1>) -> ArrayBase<So, Ix1>
+where
+    A: Scalar,
+    Sa: Data<Elem = A>,
+    Sb: Data<Elem = A>,
+    So: DataOwned<Elem = A>,
+{
+    let (x, info) = with_lapack_clone(b, |b: &mut ArrayBase<So, Ix1>| {
+        with_lapack_readonly(a, |a: &ArrayBase<Sa, Ix2>) {
+            unimplemented!()
+        }
+    });
+    x
+}
+
+fn solve_inplace_1<'a, A, Sa, Sb>(a: &ArrayBase<Sa, Ix2>, b: &'a mut ArrayBase<Sb, Ix1>) -> &'a mut ArrayBase<Sb, Ix1>
+where
+    A: Scalar,
+    Sa: Data<Elem = A>,
+    Sb: DataMut<Elem = A>,
+{
+    let (x, info) = with_lapack_inplace(b, |b: &mut ArrayBase<Sb, Ix1>| {
+        with_lapack_readonly(a, |a: &ArrayBase<Sa, Ix2>) {
+            unimplemented!()
+        }
+    });
+    x
+}
+
+fn inverse<A, Sa, So>(a: &ArrayBase<Sa, Ix2>) -> ArrayBase<So, Ix2>
+where
+    A: Scalar,
+    Sa: Data<Elem = A>,
+    So: DataOwned<Elem = A>
+{
+    let (inv, info) = with_lapack_clone(a, |a: &mut ArrayBase<So, Ix2>| {
+        unimplemented!()
+    });
+    inv
+}
+
+fn inverse_inplace<A, S>(a: &mut ArrayBase<S, Ix2>) -> &mut ArrayBase<S, Ix2>
+where
+    A: Scalar,
+    S: DataMut<Elem = A>,
+{
+    let (inv, info) = with_lapack_inplace(a, |a: &mut ArrayBase<S, Ix2>| {
+        unimplemented!()
+    });
+    inv
+}
+
+fn inverse_into<A, S>(a: ArrayBase<S, Ix2>) -> ArrayBase<S, Ix2>
+where
+    A: Scalar,
+    S: DataMut<Elem = A> + DataOwned,
+{
+    let (inv, info) = with_lapack_into(a, |a: &mut ArrayBase<S, Ix2>| {
+        unimplemented!()
+    });
+    inv
+}
+
+// TODO: NaN checking?
