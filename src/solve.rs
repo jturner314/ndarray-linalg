@@ -71,59 +71,68 @@ pub use lapack_traits::{Pivot, Transpose};
 /// If you plan to solve many equations with the same `A` matrix but different
 /// `b` vectors, it's faster to factor the `A` matrix once using the
 /// `Factorize` trait, and then solve using the `LUFactorized` struct.
-pub trait Solve<A: Scalar> {
+pub trait Solve<A: Scalar, D: Dimension> {
     /// Solves a system of linear equations `A * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve<S: Data<Elem = A>>(&self, b: &ArrayBase<S, Ix1>) -> Result<Array1<A>> {
+    fn solve<Sb, Sx>(&self, b: &ArrayBase<Sb, D>) -> Result<ArrayBase<Sx, D>>
+    where
+        Sb: Data<Elem = A>,
+        Sx: DataOwned<Elem = A>,
+    {
         let mut b = replicate(b);
         self.solve_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, Ix1>) -> Result<ArrayBase<S, Ix1>> {
+    fn solve_into<Sb>(&self, mut b: ArrayBase<Sb, D>) -> Result<ArrayBase<Sb, D>>
+    where
+        Sb: DataMut<Elem = A>,
+    {
         self.solve_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, Ix1>) -> Result<&'a mut ArrayBase<S, Ix1>>;
+    fn solve_inplace<'a, Sb>(&self, &'a mut ArrayBase<Sb, D>) -> Result<&'a mut ArrayBase<Sb, D>>
+    where
+        Sb: DataMut<Elem = A>;
 
     /// Solves a system of linear equations `A^T * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_t<S: Data<Elem = A>>(&self, b: &ArrayBase<S, Ix1>) -> Result<Array1<A>> {
+    fn solve_t<S: Data<Elem = A>>(&self, b: &ArrayBase<S, D>) -> Result<Array1<A>> {
         let mut b = replicate(b);
         self.solve_t_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^T * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_t_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, Ix1>) -> Result<ArrayBase<S, Ix1>> {
+    fn solve_t_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, D>) -> Result<ArrayBase<S, D>> {
         self.solve_t_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^T * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_t_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, Ix1>)
-        -> Result<&'a mut ArrayBase<S, Ix1>>;
+    fn solve_t_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, D>)
+        -> Result<&'a mut ArrayBase<S, D>>;
 
     /// Solves a system of linear equations `A^H * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_h<S: Data<Elem = A>>(&self, b: &ArrayBase<S, Ix1>) -> Result<Array1<A>> {
+    fn solve_h<S: Data<Elem = A>>(&self, b: &ArrayBase<S, D>) -> Result<Array1<A>> {
         let mut b = replicate(b);
         self.solve_h_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^H * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_h_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, Ix1>) -> Result<ArrayBase<S, Ix1>> {
+    fn solve_h_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, D>) -> Result<ArrayBase<S, D>> {
         self.solve_h_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^H * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_h_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, Ix1>)
-        -> Result<&'a mut ArrayBase<S, Ix1>>;
+    fn solve_h_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, D>)
+        -> Result<&'a mut ArrayBase<S, D>>;
 }
 
 /// Represents the LU factorization of a matrix `A` as `A = P*L*U`.
@@ -135,7 +144,7 @@ pub struct LUFactorized<S: Data> {
     pub ipiv: Pivot,
 }
 
-impl<A, S> Solve<A> for LUFactorized<S>
+impl<A, S> Solve<A, Ix1> for LUFactorized<S>
 where
     A: Scalar,
     S: Data<Elem = A>,
@@ -144,50 +153,32 @@ where
     where
         Sb: DataMut<Elem = A>,
     {
-        unsafe {
-            A::solve(
-                self.a.square_layout()?,
-                Transpose::No,
-                self.a.as_allocated()?,
-                &self.ipiv,
-                rhs.as_slice_mut().unwrap(),
-            )?
-        };
+        self.a.with_lapack_view(|a| {
+            rhs.with_lapack_view_mut(|b| unsafe { A::solve(Transpose::No, a, &self.ipiv, b) })
+        })?;
         Ok(rhs)
     }
     fn solve_t_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
     where
         Sb: DataMut<Elem = A>,
     {
-        unsafe {
-            A::solve(
-                self.a.square_layout()?,
-                Transpose::Transpose,
-                self.a.as_allocated()?,
-                &self.ipiv,
-                rhs.as_slice_mut().unwrap(),
-            )?
-        };
+        self.a.with_lapack_view(|a| {
+            rhs.with_lapack_view_mut(|b| unsafe { A::solve(Transpose::Transpose, a, &self.ipiv, b) })
+        })?;
         Ok(rhs)
     }
     fn solve_h_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
     where
         Sb: DataMut<Elem = A>,
     {
-        unsafe {
-            A::solve(
-                self.a.square_layout()?,
-                Transpose::Hermite,
-                self.a.as_allocated()?,
-                &self.ipiv,
-                rhs.as_slice_mut().unwrap(),
-            )?
-        };
+        self.a.with_lapack_view(|a| {
+            rhs.with_lapack_view_mut(|b| unsafe { A::solve(Transpose::Hermite, a, &self.ipiv, b) })
+        })?;
         Ok(rhs)
     }
 }
 
-impl<A, S> Solve<A> for ArrayBase<S, Ix2>
+impl<A, S> Solve<A, Ix1> for ArrayBase<S, Ix2>
 where
     A: Scalar,
     S: Data<Elem = A>,
@@ -237,7 +228,7 @@ where
 {
     fn factorize_into(self) -> Result<LUFactorized<S>> {
         let mut a = self.into_lapack();
-        let ipiv = unsafe { A::lu(a.view_mut())? };
+        let ipiv = unsafe { A::lu(&mut a)? };
         Ok(LUFactorized {
             a: a.into(),
             ipiv: ipiv,
@@ -252,8 +243,11 @@ where
 {
     fn factorize(&self) -> Result<LUFactorized<OwnedRepr<A>>> {
         let mut a = self.to_lapack_clone();
-        let ipiv = unsafe { A::lu(a.view_mut())? };
-        Ok(LUFactorized { a: a.into(), ipiv: ipiv })
+        let ipiv = unsafe { A::lu(&mut a)? };
+        Ok(LUFactorized {
+            a: a.into(),
+            ipiv: ipiv,
+        })
     }
 }
 

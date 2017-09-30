@@ -1,10 +1,9 @@
 //! Solve linear problem using LU decomposition
 
 use lapack::{c, fortran};
-use ndarray::prelude::*;
 
 use error::*;
-use layout::{LapackArrayViewMut, MatrixLayout};
+use layout::{LapackViewProps, LapackViewPropsMut, MatrixLayout};
 use types::*;
 
 use super::{into_result, Pivot, Transpose};
@@ -19,22 +18,28 @@ pub trait Solve_: Sized {
     /// return_code-1)]` is exactly zero. The factorization has been completed,
     /// but the factor `U` is exactly singular, and division by zero will occur
     /// if it is used to solve a system of equations.
-    unsafe fn lu(a: LapackArrayViewMut<Self, Ix2>) -> Result<Pivot>;
+    unsafe fn lu<T>(a: &mut T) -> Result<Pivot>
+    where T: LapackViewPropsMut<Self>;
     unsafe fn inv(MatrixLayout, a: &mut [Self], &Pivot) -> Result<()>;
-    unsafe fn solve(MatrixLayout, Transpose, a: &[Self], &Pivot, b: &mut [Self]) -> Result<()>;
+    unsafe fn solve<T1, T2>(Transpose, a: &T1, &Pivot, b: &mut T2) -> Result<()>
+    where
+        T1: LapackViewProps<Self>,
+        T2: LapackViewPropsMut<Self>;
 }
 
 macro_rules! impl_solve {
     ($scalar:ty, $getrf:path, $getri:path, $getrs:path) => {
 
 impl Solve_ for $scalar {
-    unsafe fn lu(mut a: LapackArrayViewMut<Self, Ix2>) -> Result<Pivot> {
+    unsafe fn lu<T>(a: &mut T) -> Result<Pivot>
+    where
+        T: LapackViewPropsMut<Self>
+    {
         let m = a.rows() as i32;
         let n = a.cols() as i32;
         let lda = a.column_stride() as i32;
         let mut ipiv = vec![0; ::std::cmp::min(m, n) as usize];
-        let mut info = 0;
-        $getrf(m, n, a.as_data_slice_mut(), lda, &mut ipiv, &mut info);
+        let info = $getrf(c::Layout::ColumnMajor, m, n, a.as_data_slice_mut(), lda, &mut ipiv);
         into_result(info, ipiv)
     }
 
@@ -44,18 +49,33 @@ impl Solve_ for $scalar {
         into_result(info, ())
     }
 
-    unsafe fn solve(l: MatrixLayout, t: Transpose, a: &[Self], ipiv: &Pivot, b: &mut [Self]) -> Result<()> {
-        let (n, _) = l.size();
-        let nrhs = 1;
-        let ldb = 1;
-        let info = $getrs(l.lapacke_layout(), t as u8, n, nrhs, a, l.lda(), ipiv, b, ldb);
+    unsafe fn solve<T1, T2>(trans: Transpose, a: &T1, ipiv: &Pivot, b: &mut T2) -> Result<()>
+    where
+        T1: LapackViewProps<Self>,
+        T2: LapackViewPropsMut<Self>
+    {
+        a.ensure_square()?;
+        let n = a.rows() as i32;
+        let nrhs = b.cols() as i32;
+        let lda = a.column_stride() as i32;
+        let ldb = b.column_stride() as i32;
+        let info = $getrs(
+            c::Layout::ColumnMajor,
+            trans as u8,
+            n,
+            nrhs,
+            a.as_data_slice(),
+            lda,
+            ipiv,
+            b.as_data_slice_mut(),
+            ldb);
         into_result(info, ())
     }
 }
 
 }} // impl_solve!
 
-impl_solve!(f64, fortran::dgetrf, c::dgetri, c::dgetrs);
-impl_solve!(f32, fortran::sgetrf, c::sgetri, c::sgetrs);
-impl_solve!(c64, fortran::zgetrf, c::zgetri, c::zgetrs);
-impl_solve!(c32, fortran::cgetrf, c::cgetri, c::cgetrs);
+impl_solve!(f64, c::dgetrf, c::dgetri, c::dgetrs);
+impl_solve!(f32, c::sgetrf, c::sgetri, c::sgetrs);
+impl_solve!(c64, c::zgetrf, c::zgetri, c::zgetrs);
+impl_solve!(c32, c::cgetrf, c::cgetri, c::cgetrs);
