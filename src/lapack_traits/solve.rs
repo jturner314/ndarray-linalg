@@ -1,12 +1,13 @@
 //! Solve linear problem using LU decomposition
 
-use lapack::c;
+use lapack::{c, fortran};
+use ndarray::prelude::*;
 
 use error::*;
-use layout::MatrixLayout;
+use layout::{LapackArrayViewMut, MatrixLayout};
 use types::*;
 
-use super::{Pivot, Transpose, into_result};
+use super::{into_result, Pivot, Transpose};
 
 /// Wraps `*getrf`, `*getri`, and `*getrs`
 pub trait Solve_: Sized {
@@ -18,7 +19,7 @@ pub trait Solve_: Sized {
     /// return_code-1)]` is exactly zero. The factorization has been completed,
     /// but the factor `U` is exactly singular, and division by zero will occur
     /// if it is used to solve a system of equations.
-    unsafe fn lu(MatrixLayout, a: &mut [Self]) -> Result<Pivot>;
+    unsafe fn lu(a: LapackArrayViewMut<Self, Ix2>) -> Result<Pivot>;
     unsafe fn inv(MatrixLayout, a: &mut [Self], &Pivot) -> Result<()>;
     unsafe fn solve(MatrixLayout, Transpose, a: &[Self], &Pivot, b: &mut [Self]) -> Result<()>;
 }
@@ -27,11 +28,13 @@ macro_rules! impl_solve {
     ($scalar:ty, $getrf:path, $getri:path, $getrs:path) => {
 
 impl Solve_ for $scalar {
-    unsafe fn lu(l: MatrixLayout, a: &mut [Self]) -> Result<Pivot> {
-        let (row, col) = l.size();
-        let k = ::std::cmp::min(row, col);
-        let mut ipiv = vec![0; k as usize];
-        let info = $getrf(l.lapacke_layout(), row, col, a, l.lda(), &mut ipiv);
+    unsafe fn lu(mut a: LapackArrayViewMut<Self, Ix2>) -> Result<Pivot> {
+        let m = a.rows() as i32;
+        let n = a.cols() as i32;
+        let lda = a.column_stride() as i32;
+        let mut ipiv = vec![0; ::std::cmp::min(m, n) as usize];
+        let mut info = 0;
+        $getrf(m, n, a.as_data_slice_mut(), lda, &mut ipiv, &mut info);
         into_result(info, ipiv)
     }
 
@@ -52,7 +55,7 @@ impl Solve_ for $scalar {
 
 }} // impl_solve!
 
-impl_solve!(f64, c::dgetrf, c::dgetri, c::dgetrs);
-impl_solve!(f32, c::sgetrf, c::sgetri, c::sgetrs);
-impl_solve!(c64, c::zgetrf, c::zgetri, c::zgetrs);
-impl_solve!(c32, c::cgetrf, c::cgetri, c::cgetrs);
+impl_solve!(f64, fortran::dgetrf, c::dgetri, c::dgetrs);
+impl_solve!(f32, fortran::sgetrf, c::sgetri, c::sgetrs);
+impl_solve!(c64, fortran::zgetrf, c::zgetri, c::zgetrs);
+impl_solve!(c32, fortran::cgetrf, c::cgetri, c::cgetrs);

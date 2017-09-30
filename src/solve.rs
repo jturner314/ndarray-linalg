@@ -233,12 +233,13 @@ pub trait FactorizeInto<S: Data> {
 impl<A, S> FactorizeInto<S> for ArrayBase<S, Ix2>
 where
     A: Scalar,
-    S: DataMut<Elem = A>,
+    S: DataOwned<Elem = A> + DataMut,
 {
-    fn factorize_into(mut self) -> Result<LUFactorized<S>> {
-        let ipiv = unsafe { A::lu(self.layout()?, self.as_allocated_mut()?)? };
+    fn factorize_into(self) -> Result<LUFactorized<S>> {
+        let mut a = self.into_lapack();
+        let ipiv = unsafe { A::lu(a.view_mut())? };
         Ok(LUFactorized {
-            a: self,
+            a: a.into(),
             ipiv: ipiv,
         })
     }
@@ -250,9 +251,9 @@ where
     Si: Data<Elem = A>,
 {
     fn factorize(&self) -> Result<LUFactorized<OwnedRepr<A>>> {
-        let mut a: Array2<A> = replicate(self);
-        let ipiv = unsafe { A::lu(a.layout()?, a.as_allocated_mut()?)? };
-        Ok(LUFactorized { a: a, ipiv: ipiv })
+        let mut a = self.to_lapack_clone();
+        let ipiv = unsafe { A::lu(a.view_mut())? };
+        Ok(LUFactorized { a: a.into(), ipiv: ipiv })
     }
 }
 
@@ -308,7 +309,7 @@ where
 impl<A, S> InverseInto for ArrayBase<S, Ix2>
 where
     A: Scalar,
-    S: DataMut<Elem = A>,
+    S: DataOwned<Elem = A> + DataMut,
 {
     type Output = Self;
 
@@ -408,7 +409,7 @@ where
 impl<A, S> DeterminantInto<A> for ArrayBase<S, Ix2>
 where
     A: Scalar,
-    S: DataMut<Elem = A>,
+    S: DataOwned<Elem = A> + DataMut,
 {
     fn det_into(self) -> Result<A> {
         self.ensure_square()?;
