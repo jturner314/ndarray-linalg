@@ -165,10 +165,10 @@ fn solve() {
             solve!(c32, $a_shape, $x_shape, $x_dim, 1e-3);
         }
     }
-    for rows in 1..4 {
+    for rows in 0..4 {
         for &a_shape in &[(rows, rows).into_shape(), (rows, rows).f()] {
             solve_all!(a_shape, rows.into_shape(), Ix1);
-            for nrhs in 1..rows + 2 {
+            for nrhs in 0..rows + 2 {
                 for &x_shape in &[(rows, nrhs).into_shape(), (rows, nrhs).f()] {
                     solve_all!(a_shape, x_shape, Ix2);
                 }
@@ -202,10 +202,10 @@ fn solve_t() {
             solve_t!(c32, $a_shape, $x_shape, $x_dim, 1e-3);
         }
     }
-    for rows in 1..4 {
+    for rows in 0..4 {
         for &a_shape in &[(rows, rows).into_shape(), (rows, rows).f()] {
             solve_t_all!(a_shape, rows.into_shape(), Ix1);
-            for nrhs in 1..rows + 2 {
+            for nrhs in 0..rows + 2 {
                 for &x_shape in &[(rows, nrhs).into_shape(), (rows, nrhs).f()] {
                     solve_t_all!(a_shape, x_shape, Ix2);
                 }
@@ -239,10 +239,10 @@ fn solve_h() {
             solve_h!(c32, $a_shape, $x_shape, $x_dim, 1e-3);
         }
     }
-    for rows in 1..4 {
+    for rows in 0..4 {
         for &a_shape in &[(rows, rows).into_shape(), (rows, rows).f()] {
             solve_h_all!(a_shape, rows.into_shape(), Ix1);
-            for nrhs in 1..rows + 2 {
+            for nrhs in 0..rows + 2 {
                 for &x_shape in &[(rows, nrhs).into_shape(), (rows, nrhs).f()] {
                     solve_h_all!(a_shape, x_shape, Ix2);
                 }
