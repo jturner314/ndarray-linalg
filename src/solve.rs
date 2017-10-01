@@ -47,7 +47,6 @@
 
 use ndarray::*;
 
-use super::convert::*;
 use super::error::*;
 use super::layout::*;
 use super::types::*;
@@ -71,68 +70,96 @@ pub use lapack_traits::{Pivot, Transpose};
 /// If you plan to solve many equations with the same `A` matrix but different
 /// `b` vectors, it's faster to factor the `A` matrix once using the
 /// `Factorize` trait, and then solve using the `LUFactorized` struct.
-pub trait Solve<A: Scalar, D: Dimension> {
+pub trait Solve<A: Scalar, Db: Dimension> {
     /// Solves a system of linear equations `A * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve<Sb, Sx>(&self, b: &ArrayBase<Sb, D>) -> Result<ArrayBase<Sx, D>>
+    fn solve<Sb>(&self, b: &ArrayBase<Sb, Db>) -> Result<Array<A, Db>>
     where
         Sb: Data<Elem = A>,
-        Sx: DataOwned<Elem = A>,
+        ArrayBase<Sb, Db>: ToLapackClone<A, Db>,
+        Array<A, Db>: WithLapackInputOutput<A>,
     {
-        let mut b = replicate(b);
+        let mut b = b.to_lapack_clone();
         self.solve_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_into<Sb>(&self, mut b: ArrayBase<Sb, D>) -> Result<ArrayBase<Sb, D>>
+    fn solve_into<Sb>(&self, b: ArrayBase<Sb, Db>) -> Result<ArrayBase<Sb, Db>>
+    where
+        Sb: DataOwned<Elem = A> + DataMut,
+        ArrayBase<Sb, Db>: IntoLapack + WithLapackInputOutput<A>,
+    {
+        let mut b = b.into_lapack();
+        self.solve_inplace(&mut b)?;
+        Ok(b)
+    }
+    /// Solves a system of linear equations `A * x = b` where `A` is `self`, `b`
+    /// is the argument, and `x` is the successful result.
+    fn solve_inplace<'a, Sb>(&self, &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
     where
         Sb: DataMut<Elem = A>,
-    {
-        self.solve_inplace(&mut b)?;
-        Ok(b)
-    }
-    /// Solves a system of linear equations `A * x = b` where `A` is `self`, `b`
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>;
+
+    /// Solves a system of linear equations `A^T * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_inplace<'a, Sb>(&self, &'a mut ArrayBase<Sb, D>) -> Result<&'a mut ArrayBase<Sb, D>>
+    fn solve_t<Sb>(&self, b: &ArrayBase<Sb, Db>) -> Result<Array<A, Db>>
     where
-        Sb: DataMut<Elem = A>;
-
-    /// Solves a system of linear equations `A^T * x = b` where `A` is `self`, `b`
-    /// is the argument, and `x` is the successful result.
-    fn solve_t<S: Data<Elem = A>>(&self, b: &ArrayBase<S, D>) -> Result<Array1<A>> {
-        let mut b = replicate(b);
+        Sb: Data<Elem = A>,
+        ArrayBase<Sb, Db>: ToLapackClone<A, Db>,
+        Array<A, Db>: WithLapackInputOutput<A>,
+    {
+        let mut b = b.to_lapack_clone();
         self.solve_t_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^T * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_t_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, D>) -> Result<ArrayBase<S, D>> {
+    fn solve_t_into<Sb>(&self, b: ArrayBase<Sb, Db>) -> Result<ArrayBase<Sb, Db>>
+    where
+        Sb: DataOwned<Elem = A> + DataMut,
+        ArrayBase<Sb, Db>: IntoLapack + WithLapackInputOutput<A>,
+    {
+        let mut b = b.into_lapack();
         self.solve_t_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^T * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_t_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, D>)
-        -> Result<&'a mut ArrayBase<S, D>>;
+    fn solve_t_inplace<'a, Sb>(&self, &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
+    where
+        Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>;
 
     /// Solves a system of linear equations `A^H * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_h<S: Data<Elem = A>>(&self, b: &ArrayBase<S, D>) -> Result<Array1<A>> {
-        let mut b = replicate(b);
+    fn solve_h<Sb>(&self, b: &ArrayBase<Sb, Db>) -> Result<Array<A, Db>>
+    where
+        Sb: Data<Elem = A>,
+        ArrayBase<Sb, Db>: ToLapackClone<A, Db>,
+        Array<A, Db>: WithLapackInputOutput<A>,
+    {
+        let mut b = b.to_lapack_clone();
         self.solve_h_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^H * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_h_into<S: DataMut<Elem = A>>(&self, mut b: ArrayBase<S, D>) -> Result<ArrayBase<S, D>> {
+    fn solve_h_into<Sb>(&self, b: ArrayBase<Sb, Db>) -> Result<ArrayBase<Sb, Db>>
+    where
+        Sb: DataOwned<Elem = A> + DataMut,
+        ArrayBase<Sb, Db>: IntoLapack + WithLapackInputOutput<A>,
+    {
+        let mut b = b.into_lapack();
         self.solve_h_inplace(&mut b)?;
         Ok(b)
     }
     /// Solves a system of linear equations `A^H * x = b` where `A` is `self`, `b`
     /// is the argument, and `x` is the successful result.
-    fn solve_h_inplace<'a, S: DataMut<Elem = A>>(&self, &'a mut ArrayBase<S, D>)
-        -> Result<&'a mut ArrayBase<S, D>>;
+    fn solve_h_inplace<'a, Sb>(&self, &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
+    where
+        Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>;
 }
 
 /// Represents the LU factorization of a matrix `A` as `A = P*L*U`.
@@ -144,62 +171,74 @@ pub struct LUFactorized<S: Data> {
     pub ipiv: Pivot,
 }
 
-impl<A, S> Solve<A, Ix1> for LUFactorized<S>
+impl<A, S, Db> Solve<A, Db> for LUFactorized<S>
 where
     A: Scalar,
     S: Data<Elem = A>,
+    Db: Dimension,
 {
-    fn solve_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
+    fn solve_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
     where
         Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>
     {
-        self.a.with_lapack_view(|a| {
-            rhs.with_lapack_view_mut(|b| unsafe { A::solve(Transpose::No, a, &self.ipiv, b) })
+        self.a.with_lapack_in(|a| {
+            rhs.with_lapack_inout(|b| unsafe { A::solve(Transpose::No, a, &self.ipiv, b) })
         })?;
         Ok(rhs)
     }
-    fn solve_t_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
+    fn solve_t_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
     where
         Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>
     {
-        self.a.with_lapack_view(|a| {
-            rhs.with_lapack_view_mut(|b| unsafe { A::solve(Transpose::Transpose, a, &self.ipiv, b) })
+        self.a.with_lapack_in(|a| {
+            rhs.with_lapack_inout(|b| unsafe {
+                A::solve(Transpose::Transpose, a, &self.ipiv, b)
+            })
         })?;
         Ok(rhs)
     }
-    fn solve_h_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
+    fn solve_h_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
     where
         Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>
     {
-        self.a.with_lapack_view(|a| {
-            rhs.with_lapack_view_mut(|b| unsafe { A::solve(Transpose::Hermite, a, &self.ipiv, b) })
+        self.a.with_lapack_in(|a| {
+            rhs.with_lapack_inout(|b| unsafe {
+                A::solve(Transpose::Hermite, a, &self.ipiv, b)
+            })
         })?;
         Ok(rhs)
     }
 }
 
-impl<A, S> Solve<A, Ix1> for ArrayBase<S, Ix2>
+impl<A, S, Db> Solve<A, Db> for ArrayBase<S, Ix2>
 where
     A: Scalar,
     S: Data<Elem = A>,
+    Db: Dimension,
 {
-    fn solve_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
+    fn solve_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
     where
         Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>
     {
         let f = self.factorize()?;
         f.solve_inplace(rhs)
     }
-    fn solve_t_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
+    fn solve_t_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
     where
         Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>
     {
         let f = self.factorize()?;
         f.solve_t_inplace(rhs)
     }
-    fn solve_h_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Ix1>) -> Result<&'a mut ArrayBase<Sb, Ix1>>
+    fn solve_h_inplace<'a, Sb>(&self, mut rhs: &'a mut ArrayBase<Sb, Db>) -> Result<&'a mut ArrayBase<Sb, Db>>
     where
         Sb: DataMut<Elem = A>,
+        ArrayBase<Sb, Db>: WithLapackInputOutput<A>
     {
         let f = self.factorize()?;
         f.solve_h_inplace(rhs)
@@ -228,9 +267,9 @@ where
 {
     fn factorize_into(self) -> Result<LUFactorized<S>> {
         let mut a = self.into_lapack();
-        let ipiv = unsafe { A::lu(&mut a)? };
+        let ipiv = a.with_lapack_inout(|mut a| unsafe { A::lu(&mut a) })?;
         Ok(LUFactorized {
-            a: a.into(),
+            a: a,
             ipiv: ipiv,
         })
     }
@@ -243,9 +282,9 @@ where
 {
     fn factorize(&self) -> Result<LUFactorized<OwnedRepr<A>>> {
         let mut a = self.to_lapack_clone();
-        let ipiv = unsafe { A::lu(&mut a)? };
+        let ipiv = a.with_lapack_inout(|mut a| unsafe { A::lu(&mut a) })?;
         Ok(LUFactorized {
-            a: a.into(),
+            a: a,
             ipiv: ipiv,
         })
     }
@@ -272,15 +311,10 @@ where
 {
     type Output = ArrayBase<S, Ix2>;
 
-    fn inv_into(mut self) -> Result<ArrayBase<S, Ix2>> {
-        unsafe {
-            A::inv(
-                self.a.square_layout()?,
-                self.a.as_allocated_mut()?,
-                &self.ipiv,
-            )?
-        };
-        Ok(self.a)
+    fn inv_into(self) -> Result<ArrayBase<S, Ix2>> {
+        let LUFactorized { mut a, ipiv } = self;
+        a.with_lapack_inout(|mut a| unsafe { A::inv(a, &ipiv )})?;
+        Ok(a)
     }
 }
 
@@ -292,11 +326,9 @@ where
     type Output = Array2<A>;
 
     fn inv(&self) -> Result<Array2<A>> {
-        let f = LUFactorized {
-            a: replicate(&self.a),
-            ipiv: self.ipiv.clone(),
-        };
-        f.inv_into()
+        let mut a = self.a.to_lapack_clone();
+        a.with_lapack_inout(|a| unsafe { A::inv(a, &self.ipiv) })?;
+        Ok(a)
     }
 }
 

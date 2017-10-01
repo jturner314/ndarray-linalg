@@ -139,3 +139,114 @@ fn det_nonsquare() {
         }
     }
 }
+
+#[test]
+fn solve() {
+    macro_rules! solve {
+        ($elem:ty, $a_shape:expr, $x_shape:expr, $x_dim:ty, $rtol:expr) => {
+            let a: Array2<$elem> = random($a_shape);
+            let x: Array<$elem, $x_dim> = random($x_shape);
+            let b = a.dot(&x);
+            println!("a = \n{:?}", a);
+            println!("x = \n{:?}", x);
+            assert_close_max!(&a.solve(&b).unwrap(), &x, $rtol);
+            assert_close_max!(&a.solve_into(b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.solve_inplace(&mut b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve(&b).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_into(b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_inplace(&mut b.clone()).unwrap(), &x, $rtol);
+        }
+    }
+    macro_rules! solve_all {
+        ($a_shape:expr, $x_shape:expr, $x_dim:ty) => {
+            solve!(f64, $a_shape, $x_shape, $x_dim, 1e-9);
+            solve!(f32, $a_shape, $x_shape, $x_dim, 1e-3);
+            solve!(c64, $a_shape, $x_shape, $x_dim, 1e-9);
+            solve!(c32, $a_shape, $x_shape, $x_dim, 1e-3);
+        }
+    }
+    for rows in 1..4 {
+        for &a_shape in &[(rows, rows).into_shape(), (rows, rows).f()] {
+            solve_all!(a_shape, rows.into_shape(), Ix1);
+            for nrhs in 1..rows + 2 {
+                for &x_shape in &[(rows, nrhs).into_shape(), (rows, nrhs).f()] {
+                    solve_all!(a_shape, x_shape, Ix2);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn solve_t() {
+    macro_rules! solve_t {
+        ($elem:ty, $a_shape:expr, $x_shape:expr, $x_dim:ty, $rtol:expr) => {
+            let a: Array2<$elem> = random($a_shape);
+            let x: Array<$elem, $x_dim> = random($x_shape);
+            let b = a.t().dot(&x);
+            println!("a = \n{:?}", a);
+            println!("x = \n{:?}", x);
+            assert_close_max!(&a.solve_t(&b).unwrap(), &x, $rtol);
+            assert_close_max!(&a.solve_t_into(b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.solve_t_inplace(&mut b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_t(&b).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_t_into(b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_t_inplace(&mut b.clone()).unwrap(), &x, $rtol);
+        }
+    }
+    macro_rules! solve_t_all {
+        ($a_shape:expr, $x_shape:expr, $x_dim:ty) => {
+            solve_t!(f64, $a_shape, $x_shape, $x_dim, 1e-9);
+            solve_t!(f32, $a_shape, $x_shape, $x_dim, 1e-3);
+            solve_t!(c64, $a_shape, $x_shape, $x_dim, 1e-9);
+            solve_t!(c32, $a_shape, $x_shape, $x_dim, 1e-3);
+        }
+    }
+    for rows in 1..4 {
+        for &a_shape in &[(rows, rows).into_shape(), (rows, rows).f()] {
+            solve_t_all!(a_shape, rows.into_shape(), Ix1);
+            for nrhs in 1..rows + 2 {
+                for &x_shape in &[(rows, nrhs).into_shape(), (rows, nrhs).f()] {
+                    solve_t_all!(a_shape, x_shape, Ix2);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn solve_h() {
+    macro_rules! solve_h {
+        ($elem:ty, $a_shape:expr, $x_shape:expr, $x_dim:ty, $rtol:expr) => {
+            let a: Array2<$elem> = random($a_shape);
+            let x: Array<$elem, $x_dim> = random($x_shape);
+            let b = a.t().mapv(|elem| elem.conj()).dot(&x);
+            println!("a = \n{:?}", a);
+            println!("x = \n{:?}", x);
+            assert_close_max!(&a.solve_h(&b).unwrap(), &x, $rtol);
+            assert_close_max!(&a.solve_h_into(b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.solve_h_inplace(&mut b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_h(&b).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_h_into(b.clone()).unwrap(), &x, $rtol);
+            assert_close_max!(&a.factorize().unwrap().solve_h_inplace(&mut b.clone()).unwrap(), &x, $rtol);
+        }
+    }
+    macro_rules! solve_h_all {
+        ($a_shape:expr, $x_shape:expr, $x_dim:ty) => {
+            solve_h!(f64, $a_shape, $x_shape, $x_dim, 1e-9);
+            solve_h!(f32, $a_shape, $x_shape, $x_dim, 1e-3);
+            solve_h!(c64, $a_shape, $x_shape, $x_dim, 1e-9);
+            solve_h!(c32, $a_shape, $x_shape, $x_dim, 1e-3);
+        }
+    }
+    for rows in 1..4 {
+        for &a_shape in &[(rows, rows).into_shape(), (rows, rows).f()] {
+            solve_h_all!(a_shape, rows.into_shape(), Ix1);
+            for nrhs in 1..rows + 2 {
+                for &x_shape in &[(rows, nrhs).into_shape(), (rows, nrhs).f()] {
+                    solve_h_all!(a_shape, x_shape, Ix2);
+                }
+            }
+        }
+    }
+}
