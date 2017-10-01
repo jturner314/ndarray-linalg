@@ -3,7 +3,7 @@
 use lapack::c;
 
 use error::*;
-use layout::{LapackInput, LapackInputOutput};
+use layout::{LapackView, LapackViewMut};
 use types::*;
 
 use super::{into_result, Pivot, Transpose};
@@ -18,18 +18,18 @@ pub trait Solve_: Sized {
     /// return_code-1)]` is exactly zero. The factorization has been completed,
     /// but the factor `U` is exactly singular, and division by zero will occur
     /// if it is used to solve a system of equations.
-    unsafe fn lu(a: &mut LapackInputOutput<Self>) -> Result<Pivot>;
-    unsafe fn inv(a: &mut LapackInputOutput<Self>, &Pivot) -> Result<()>;
-    unsafe fn solve(Transpose, a: &LapackInput<Self>, &Pivot, b: &mut LapackInputOutput<Self>) -> Result<()>;
+    unsafe fn lu(a: &mut LapackViewMut<Self>) -> Result<Pivot>;
+    unsafe fn inv(a: &mut LapackViewMut<Self>, &Pivot) -> Result<()>;
+    unsafe fn solve(Transpose, a: &LapackView<Self>, &Pivot, b: &mut LapackViewMut<Self>) -> Result<()>;
 }
 
 macro_rules! impl_solve {
     ($scalar:ty, $getrf:path, $getri:path, $getrs:path) => {
 
 impl Solve_ for $scalar {
-    unsafe fn lu(a: &mut LapackInputOutput<Self>) -> Result<Pivot>
+    unsafe fn lu(a: &mut LapackViewMut<Self>) -> Result<Pivot>
     {
-        let LapackInputOutput {
+        let LapackViewMut {
             rows: m,
             cols: n,
             column_stride: lda,
@@ -40,9 +40,9 @@ impl Solve_ for $scalar {
         into_result(info, ipiv)
     }
 
-    unsafe fn inv(a: &mut LapackInputOutput<Self>, ipiv: &Pivot) -> Result<()> {
+    unsafe fn inv(a: &mut LapackViewMut<Self>, ipiv: &Pivot) -> Result<()> {
         a.ensure_square()?;
-        let LapackInputOutput {
+        let LapackViewMut {
             rows: n,
             column_stride: lda,
             data_slice_mut: ref mut a_slice_mut,
@@ -52,18 +52,18 @@ impl Solve_ for $scalar {
         into_result(info, ())
     }
 
-    unsafe fn solve(trans: Transpose, a: &LapackInput<Self>, ipiv: &Pivot, b: &mut LapackInputOutput<Self>) -> Result<()>
+    unsafe fn solve(trans: Transpose, a: &LapackView<Self>, ipiv: &Pivot, b: &mut LapackViewMut<Self>) -> Result<()>
     {
         a.ensure_square()?;
         // TODO: return Result here
         assert_eq!(a.rows, b.rows);
-        let LapackInput {
+        let LapackView {
             rows: n,
             column_stride: lda,
             data_slice: a_slice,
             ..
         } = *a;
-        let LapackInputOutput {
+        let LapackViewMut {
             cols: nrhs,
             column_stride: ldb,
             data_slice_mut: ref mut b_slice_mut,

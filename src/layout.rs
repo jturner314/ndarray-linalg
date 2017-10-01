@@ -138,7 +138,7 @@ where
 // TODO: handle triangular arrays more efficiently
 // TODO: add NaN checking
 
-pub struct LapackInput<'a, A: 'a> {
+pub struct LapackView<'a, A: 'a> {
     pub rows: i32,
     pub cols: i32,
     pub column_stride: i32,
@@ -147,7 +147,7 @@ pub struct LapackInput<'a, A: 'a> {
     pub data_slice: &'a [A],
 }
 
-pub struct LapackInputOutput<'a, A: 'a> {
+pub struct LapackViewMut<'a, A: 'a> {
     pub rows: i32,
     pub cols: i32,
     pub column_stride: i32,
@@ -156,7 +156,7 @@ pub struct LapackInputOutput<'a, A: 'a> {
     pub data_slice_mut: &'a mut [A],
 }
 
-impl<'a, A: 'a> LapackInput<'a, A> {
+impl<'a, A: 'a> LapackView<'a, A> {
     pub fn ensure_square(&self) -> Result<()> {
         if self.rows == self.cols {
             Ok(())
@@ -166,7 +166,7 @@ impl<'a, A: 'a> LapackInput<'a, A> {
     }
 }
 
-impl<'a, A: 'a> LapackInputOutput<'a, A> {
+impl<'a, A: 'a> LapackViewMut<'a, A> {
     pub fn ensure_square(&self) -> Result<()> {
         if self.rows == self.cols {
             Ok(())
@@ -194,13 +194,13 @@ trait FromLapackArrayMut<A, D> {
     where S: DataMut<Elem = A>;
 }
 
-impl<'a, A> FromLapackArray<A, Ix1> for LapackInput<'a, A> {
-    fn from_lapack_array<S>(array: &ArrayBase<S, Ix1>) -> LapackInput<'a, A>
+impl<'a, A> FromLapackArray<A, Ix1> for LapackView<'a, A> {
+    fn from_lapack_array<S>(array: &ArrayBase<S, Ix1>) -> LapackView<'a, A>
     where
         S: Data<Elem = A>,
     {
         debug_assert_eq!(array.check_lapack_layout(), LapackLayoutStatus::IsLapack);
-        LapackInput {
+        LapackView {
             rows: array.len() as i32,
             cols: 1,
             column_stride: ::std::cmp::max(1, array.len() as i32),
@@ -209,13 +209,13 @@ impl<'a, A> FromLapackArray<A, Ix1> for LapackInput<'a, A> {
     }
 }
 
-impl<'a, A> FromLapackArrayMut<A, Ix1> for LapackInputOutput<'a, A> {
-    fn from_lapack_array_mut<S>(array: &mut ArrayBase<S, Ix1>) -> LapackInputOutput<'a, A>
+impl<'a, A> FromLapackArrayMut<A, Ix1> for LapackViewMut<'a, A> {
+    fn from_lapack_array_mut<S>(array: &mut ArrayBase<S, Ix1>) -> LapackViewMut<'a, A>
     where
         S: DataMut<Elem = A>,
     {
         debug_assert_eq!(array.check_lapack_layout(), LapackLayoutStatus::IsLapack);
-        LapackInputOutput {
+        LapackViewMut {
             rows: array.len() as i32,
             cols: 1,
             column_stride: ::std::cmp::max(1, array.len() as i32),
@@ -224,8 +224,8 @@ impl<'a, A> FromLapackArrayMut<A, Ix1> for LapackInputOutput<'a, A> {
     }
 }
 
-impl<'a, A> FromLapackArray<A, Ix2> for LapackInput<'a, A> {
-    fn from_lapack_array<S>(array: &ArrayBase<S, Ix2>) -> LapackInput<'a, A>
+impl<'a, A> FromLapackArray<A, Ix2> for LapackView<'a, A> {
+    fn from_lapack_array<S>(array: &ArrayBase<S, Ix2>) -> LapackView<'a, A>
     where
         S: Data<Elem = A>,
     {
@@ -239,7 +239,7 @@ impl<'a, A> FromLapackArray<A, Ix2> for LapackInput<'a, A> {
         } else {
             (array.cols() - 1) * (column_stride as usize) + array.rows()
         };
-        LapackInput {
+        LapackView {
             rows: array.rows() as i32,
             cols: array.cols() as i32,
             column_stride,
@@ -248,8 +248,8 @@ impl<'a, A> FromLapackArray<A, Ix2> for LapackInput<'a, A> {
     }
 }
 
-impl<'a, A> FromLapackArrayMut<A, Ix2> for LapackInputOutput<'a, A> {
-    fn from_lapack_array_mut<S>(array: &mut ArrayBase<S, Ix2>) -> LapackInputOutput<'a, A>
+impl<'a, A> FromLapackArrayMut<A, Ix2> for LapackViewMut<'a, A> {
+    fn from_lapack_array_mut<S>(array: &mut ArrayBase<S, Ix2>) -> LapackViewMut<'a, A>
     where
         S: DataMut<Elem = A>,
     {
@@ -263,7 +263,7 @@ impl<'a, A> FromLapackArrayMut<A, Ix2> for LapackInputOutput<'a, A> {
         } else {
             (array.cols() - 1) * (column_stride as usize) + array.rows()
         };
-        LapackInputOutput {
+        LapackViewMut {
             rows: array.rows() as i32,
             cols: array.cols() as i32,
             column_stride,
@@ -382,27 +382,27 @@ where
     }
 }
 
-pub trait WithLapackInputOutput<A> {
-    fn with_lapack_inout<F, O>(&mut self, body: F) -> O
-    where F: FnOnce(&mut LapackInputOutput<A>) -> O;
+pub trait WithLapackViewMut<A> {
+    fn with_lapack_view_mut<F, O>(&mut self, body: F) -> O
+    where F: FnOnce(&mut LapackViewMut<A>) -> O;
 }
 
-macro_rules! impl_with_lapack_inout {
+macro_rules! impl_with_lapack_view_mut {
     ($D:ty) => {
-        impl<A, S> WithLapackInputOutput<A> for ArrayBase<S, $D>
+        impl<A, S> WithLapackViewMut<A> for ArrayBase<S, $D>
         where
             A: Clone,
             S: DataMut<Elem = A>,
         {
-            fn with_lapack_inout<F, O>(&mut self, body: F) -> O
+            fn with_lapack_view_mut<F, O>(&mut self, body: F) -> O
             where
-                F: FnOnce(&mut LapackInputOutput<A>) -> O,
+                F: FnOnce(&mut LapackViewMut<A>) -> O,
             {
                 if let LapackLayoutStatus::IsLapack = self.check_lapack_layout() {
-                    body(&mut LapackInputOutput::from_lapack_array_mut(self))
+                    body(&mut LapackViewMut::from_lapack_array_mut(self))
                 } else {
                     let mut new = self.to_lapack_clone::<OwnedRepr<A>>();
-                    let out = body(&mut LapackInputOutput::from_lapack_array_mut(&mut new));
+                    let out = body(&mut LapackViewMut::from_lapack_array_mut(&mut new));
                     self.assign(&new);
                     out
                 }
@@ -411,35 +411,35 @@ macro_rules! impl_with_lapack_inout {
     }
 }
 
-impl_with_lapack_inout!(Ix1);
-impl_with_lapack_inout!(Ix2);
+impl_with_lapack_view_mut!(Ix1);
+impl_with_lapack_view_mut!(Ix2);
 
-pub trait WithLapackInput<A> {
-    fn with_lapack_in<F, O>(&self, body: F) -> O
-    where F: FnOnce(&LapackInput<A>) -> O;
+pub trait WithLapackView<A> {
+    fn with_lapack_view<F, O>(&self, body: F) -> O
+    where F: FnOnce(&LapackView<A>) -> O;
 }
 
-macro_rules! impl_with_lapack_in {
+macro_rules! impl_with_lapack_view {
     ($D:ty) => {
-        impl<A, S> WithLapackInput<A> for ArrayBase<S, $D>
+        impl<A, S> WithLapackView<A> for ArrayBase<S, $D>
         where
             A: Clone,
             S: Data<Elem = A>,
         {
-            fn with_lapack_in<F, O>(&self, body: F) -> O
+            fn with_lapack_view<F, O>(&self, body: F) -> O
             where
-                F: FnOnce(&LapackInput<A>) -> O,
+                F: FnOnce(&LapackView<A>) -> O,
             {
                 if let LapackLayoutStatus::IsLapack = self.check_lapack_layout() {
-                    body(&LapackInput::from_lapack_array(self))
+                    body(&LapackView::from_lapack_array(self))
                 } else {
                     let new = self.to_lapack_clone::<OwnedRepr<A>>();
-                    body(&LapackInput::from_lapack_array(&new))
+                    body(&LapackView::from_lapack_array(&new))
                 }
             }
         }
     }
 }
 
-impl_with_lapack_in!(Ix1);
-impl_with_lapack_in!(Ix2);
+impl_with_lapack_view!(Ix1);
+impl_with_lapack_view!(Ix2);
